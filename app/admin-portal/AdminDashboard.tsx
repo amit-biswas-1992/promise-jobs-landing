@@ -33,6 +33,9 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
   const [stats, setStats] = useState<any>(null);
   const [questions, setQuestions] = useState<any[]>([]);
   const [exams, setExams] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [userTotal, setUserTotal] = useState(0);
+  const [userPage, setUserPage] = useState(1);
   const [selCat, setSelCat] = useState("bcs");
   const [qPage, setQPage] = useState(1);
   const [qTotal, setQTotal] = useState(0);
@@ -45,6 +48,7 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
   useEffect(() => { if (tab === "overview") loadStats(); }, [tab]);
   useEffect(() => { if (tab === "questions") loadQuestions(); }, [tab, selCat, qPage]);
   useEffect(() => { if (tab === "exams") loadExams(); }, [tab]);
+  useEffect(() => { if (tab === "users") loadUsers(); }, [tab, userPage]);
 
   const loadStats = async () => {
     const s = await apiCall("/admin/stats", token);
@@ -52,9 +56,21 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
   };
 
   const loadQuestions = async () => {
-    const r = await apiCall(`/questions?category=${selCat}&page=${qPage}`, token);
+    const r = await apiCall(`/admin/questions?category=${selCat}&page=${qPage}&limit=20`, token);
     setQuestions(r.data || []);
     setQTotal(r.total || 0);
+  };
+
+  const loadUsers = async () => {
+    const r = await apiCall(`/admin/users?page=${userPage}`, token);
+    setUsers(r.data || []);
+    setUserTotal(r.total || 0);
+  };
+
+  const deleteQuestion = async (id: string) => {
+    if (!confirm("এই প্রশ্ন মুছবেন?")) return;
+    await apiCall(`/admin/questions/${id}`, token, { method: "DELETE" });
+    loadQuestions();
   };
 
   const loadExams = async () => {
@@ -222,6 +238,7 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
                           <th style={{ textAlign: "left", padding: "8px 10px", color: "#64748B", fontWeight: 600 }}>প্রশ্ন</th>
                           <th style={{ padding: "8px 10px", color: "#64748B", fontWeight: 600, width: 80 }}>উত্তর</th>
                           <th style={{ padding: "8px 10px", color: "#64748B", fontWeight: 600, width: 80 }}>কঠিনতা</th>
+                          <th style={{ padding: "8px 10px", width: 60 }}></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -236,6 +253,9 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
                                 {q.difficulty === "easy" ? "সহজ" : q.difficulty === "hard" ? "কঠিন" : "মাঝারি"}
                               </span>
                             </td>
+                            <td style={{ padding: "10px", textAlign: "center" }}>
+                              <button onClick={() => deleteQuestion(q.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#EF4444", fontSize: 16 }} title="মুছুন">🗑️</button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -245,7 +265,7 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12 }}>
                   <button style={{ ...s.btn, background: qPage <= 1 ? "#E5E7EB" : "#047857", color: qPage <= 1 ? "#94A3B8" : "#fff" }} onClick={() => setQPage((p) => Math.max(1, p - 1))} disabled={qPage <= 1}>← আগের</button>
                   <span style={{ color: "#64748B", fontSize: 14, alignSelf: "center" }}>পেজ {qPage}</span>
-                  <button style={s.btn} onClick={() => setQPage((p) => p + 1)} disabled={questions.length < 50}>পরের →</button>
+                  <button style={s.btn} onClick={() => setQPage((p) => p + 1)} disabled={questions.length < 20}>পরের →</button>
                 </div>
               </div>
             </>
@@ -307,10 +327,46 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
           {/* USERS */}
           {tab === "users" && (
             <div style={s.card}>
-              <h3 style={{ fontWeight: 800, marginBottom: 8 }}>ব্যবহারকারী ব্যবস্থাপনা</h3>
-              <p style={{ color: "#64748B" }}>ব্যবহারকারীদের তালিকা, ভূমিকা পরিবর্তন ও PRO অ্যাক্টিভেশন এখানে দেখা যাবে।</p>
-              <div style={{ background: "#F8FAFC", borderRadius: 12, padding: 20, marginTop: 12 }}>
-                <p style={{ color: "#94A3B8", textAlign: "center" }}>ব্যবহারকারী API এর সাথে সংযুক্ত করুন — <code>GET /api/v1/admin/users</code></p>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <h3 style={{ fontWeight: 800, margin: 0 }}>ব্যবহারকারী ({userTotal})</h3>
+              </div>
+              {users.length === 0 ? (
+                <p style={{ color: "#94A3B8", textAlign: "center", padding: 20 }}>কোনো ব্যবহারকারী নেই</p>
+              ) : (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid #E5E7EB" }}>
+                        <th style={{ textAlign: "left", padding: "8px 10px", color: "#64748B", fontWeight: 600 }}>নাম / ফোন</th>
+                        <th style={{ padding: "8px 10px", color: "#64748B", fontWeight: 600, width: 100 }}>ভূমিকা</th>
+                        <th style={{ padding: "8px 10px", color: "#64748B", fontWeight: 600, width: 80 }}>পরীক্ষা</th>
+                        <th style={{ padding: "8px 10px", color: "#64748B", fontWeight: 600, width: 80 }}>স্কোর</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map((u) => (
+                        <tr key={u.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                          <td style={{ padding: "10px" }}>
+                            <div style={{ fontWeight: 600 }}>{u.name || "—"}</div>
+                            <div style={{ fontSize: 12, color: "#94A3B8" }}>+{u.phone}</div>
+                          </td>
+                          <td style={{ padding: "10px", textAlign: "center" }}>
+                            <span style={{ ...s.tag, background: u.role === "admin" ? "#D1FAE5" : u.role === "contributor" ? "#EDE9FE" : "#DBEAFE", color: u.role === "admin" ? "#047857" : u.role === "contributor" ? "#6D28D9" : "#1D4ED8" }}>
+                              {u.role === "admin" ? "অ্যাডমিন" : u.role === "contributor" ? "কন্ট্রিবিউটর" : "শিক্ষার্থী"}
+                            </span>
+                          </td>
+                          <td style={{ padding: "10px", textAlign: "center" }}>{u.examsTaken}</td>
+                          <td style={{ padding: "10px", textAlign: "center" }}>{u.totalScore}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12 }}>
+                <button style={{ ...s.btn, background: userPage <= 1 ? "#E5E7EB" : "#047857", color: userPage <= 1 ? "#94A3B8" : "#fff" }} onClick={() => setUserPage((p) => Math.max(1, p - 1))} disabled={userPage <= 1}>← আগের</button>
+                <span style={{ color: "#64748B", fontSize: 14, alignSelf: "center" }}>পেজ {userPage}</span>
+                <button style={s.btn} onClick={() => setUserPage((p) => p + 1)} disabled={users.length < 20}>পরের →</button>
               </div>
             </div>
           )}
