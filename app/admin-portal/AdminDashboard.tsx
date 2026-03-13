@@ -39,7 +39,10 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
   const [selCat, setSelCat] = useState("bcs");
   const [qPage, setQPage] = useState(1);
   const [qTotal, setQTotal] = useState(0);
-  const [newQ, setNewQ] = useState({ categoryId: "bcs", text: "", options: ["ক. ", "খ. ", "গ. ", "ঘ. "], correctAnswer: "ক", explanation: "", difficulty: "medium" });
+  const [qSearch, setQSearch] = useState("");
+  const [qDiff, setQDiff] = useState("");
+  const [qTopic, setQTopic] = useState("");
+  const [newQ, setNewQ] = useState({ categoryId: "bcs", text: "", options: ["ক. ", "খ. ", "গ. ", "ঘ. "], correctAnswer: "ক", explanation: "", difficulty: "medium", topic: "" });
   const [addingQ, setAddingQ] = useState(false);
   const [newExam, setNewExam] = useState({ title: "", categoryId: "bcs", scheduledAt: "", durationMinutes: 30, totalQuestions: 30 });
   const [addingE, setAddingE] = useState(false);
@@ -58,7 +61,7 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
   const [updatingRoleId, setUpdatingRoleId] = useState<string | null>(null);
 
   useEffect(() => { if (tab === "overview") loadStats(); }, [tab]);
-  useEffect(() => { if (tab === "questions") loadQuestions(); }, [tab, selCat, qPage]);
+  useEffect(() => { if (tab === "questions") loadQuestions(); }, [tab, selCat, qPage, qTopic]);
   useEffect(() => { if (tab === "exams") loadExams(); }, [tab]);
   useEffect(() => { if (tab === "users") loadUsers(); }, [tab, userPage]);
   useEffect(() => { if (tab === "roles") loadPermissions(); }, [tab]);
@@ -82,7 +85,8 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
   };
 
   const loadQuestions = async () => {
-    const r = await apiCall(`/admin/questions?category=${selCat}&page=${qPage}&limit=20`, token);
+    const topicParam = qTopic ? `&topic=${encodeURIComponent(qTopic)}` : "";
+    const r = await apiCall(`/admin/questions?category=${selCat}&page=${qPage}&limit=20${topicParam}`, token);
     setQuestions(r.data || []);
     setQTotal(r.total || 0);
   };
@@ -295,6 +299,8 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
                 <select value={newQ.correctAnswer} onChange={(e) => setNewQ({ ...newQ, correctAnswer: e.target.value })} style={{ ...s.input, width: "auto" }}>
                   {["ক", "খ", "গ", "ঘ"].map((v) => <option key={v} value={v}>{v}</option>)}
                 </select>
+                <label style={s.label}>টপিক / বিষয় (ঐচ্ছিক)</label>
+                <input value={newQ.topic} onChange={(e) => setNewQ({ ...newQ, topic: e.target.value })} style={s.input} placeholder="যেমন: বাংলা সাহিত্য, সংবিধান..." />
                 <label style={s.label}>ব্যাখ্যা</label>
                 <textarea value={newQ.explanation} onChange={(e) => setNewQ({ ...newQ, explanation: e.target.value })} rows={2} style={{ ...s.input, resize: "vertical" as const }} placeholder="ব্যাখ্যা লিখুন..." />
                 <button style={s.btn} onClick={submitQuestion} disabled={addingQ}>
@@ -304,51 +310,105 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
 
               {/* Question List */}
               <div style={s.card}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                {/* Header row: title + category pills */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                   <h3 style={{ fontWeight: 800, margin: 0 }}>প্রশ্নের তালিকা ({qTotal})</h3>
-                  <div style={{ display: "flex", gap: 8 }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
                     {CATEGORIES.map((c) => (
-                      <button key={c.id} onClick={() => { setSelCat(c.id); setQPage(1); }}
+                      <button key={c.id} onClick={() => { setSelCat(c.id); setQPage(1); setQSearch(""); setQTopic(""); setQDiff(""); }}
                         style={{ padding: "5px 12px", borderRadius: 999, border: `1.5px solid ${c.color}`, background: selCat === c.id ? c.color : "transparent", color: selCat === c.id ? "#fff" : c.color, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
                         {c.label}
                       </button>
                     ))}
                   </div>
                 </div>
-                {questions.length === 0 ? (
-                  <p style={{ color: "#94A3B8", textAlign: "center", padding: 20 }}>এই বিভাগে এখনো প্রশ্ন নেই</p>
-                ) : (
-                  <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-                      <thead>
-                        <tr style={{ borderBottom: "1px solid #E5E7EB" }}>
-                          <th style={{ textAlign: "left", padding: "8px 10px", color: "#64748B", fontWeight: 600 }}>প্রশ্ন</th>
-                          <th style={{ padding: "8px 10px", color: "#64748B", fontWeight: 600, width: 80 }}>উত্তর</th>
-                          <th style={{ padding: "8px 10px", color: "#64748B", fontWeight: 600, width: 80 }}>কঠিনতা</th>
-                          <th style={{ padding: "8px 10px", width: 60 }}></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {questions.map((q) => (
-                          <tr key={q.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
-                            <td style={{ padding: "10px", maxWidth: 400 }}>{q.text.slice(0, 80)}{q.text.length > 80 ? "..." : ""}</td>
-                            <td style={{ padding: "10px", textAlign: "center" }}>
-                              <span style={{ ...s.tag, background: "#D1FAE5", color: "#047857" }}>{q.correctAnswer}</span>
-                            </td>
-                            <td style={{ padding: "10px", textAlign: "center" }}>
-                              <span style={{ ...s.tag, background: q.difficulty === "hard" ? "#FEE2E2" : q.difficulty === "easy" ? "#D1FAE5" : "#FEF3C7", color: q.difficulty === "hard" ? "#B91C1C" : q.difficulty === "easy" ? "#047857" : "#B45309" }}>
-                                {q.difficulty === "easy" ? "সহজ" : q.difficulty === "hard" ? "কঠিন" : "মাঝারি"}
-                              </span>
-                            </td>
-                            <td style={{ padding: "10px", textAlign: "center" }}>
-                              <button onClick={() => deleteQuestion(q.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#EF4444", fontSize: 16 }} title="মুছুন">🗑️</button>
-                            </td>
+
+                {/* Filter bar */}
+                <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" as const, background: "#F8FAFC", padding: "12px 14px", borderRadius: 10, border: "1px solid #E5E7EB" }}>
+                  <input
+                    value={qSearch}
+                    onChange={(e) => setQSearch(e.target.value)}
+                    placeholder="🔍 প্রশ্ন খুঁজুন..."
+                    style={{ flex: 1, minWidth: 180, border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "8px 12px", fontSize: 14, boxSizing: "border-box" as const }}
+                  />
+                  <input
+                    value={qTopic}
+                    onChange={(e) => { setQTopic(e.target.value); setQPage(1); }}
+                    placeholder="📌 টপিক ফিল্টার..."
+                    style={{ flex: 1, minWidth: 160, border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "8px 12px", fontSize: 14, boxSizing: "border-box" as const }}
+                  />
+                  <select
+                    value={qDiff}
+                    onChange={(e) => setQDiff(e.target.value)}
+                    style={{ border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "8px 12px", fontSize: 14, cursor: "pointer", background: "#fff" }}
+                  >
+                    <option value="">সব কঠিনতা</option>
+                    <option value="easy">সহজ</option>
+                    <option value="medium">মাঝারি</option>
+                    <option value="hard">কঠিন</option>
+                  </select>
+                  {(qSearch || qDiff || qTopic) && (
+                    <button onClick={() => { setQSearch(""); setQDiff(""); setQTopic(""); setQPage(1); }}
+                      style={{ border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer", background: "#fff", color: "#64748B", fontWeight: 600 }}>
+                      ✕ ক্লিয়ার
+                    </button>
+                  )}
+                </div>
+
+                {(() => {
+                  // Client-side filter by search text and difficulty
+                  const filtered = questions.filter((q) => {
+                    const matchSearch = !qSearch || q.text.toLowerCase().includes(qSearch.toLowerCase());
+                    const matchDiff = !qDiff || q.difficulty === qDiff;
+                    return matchSearch && matchDiff;
+                  });
+                  return filtered.length === 0 ? (
+                    <p style={{ color: "#94A3B8", textAlign: "center", padding: 20 }}>
+                      {questions.length === 0 ? "এই বিভাগে এখনো প্রশ্ন নেই" : "কোনো ফলাফল পাওয়া যায়নি"}
+                    </p>
+                  ) : (
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                        <thead>
+                          <tr style={{ borderBottom: "1px solid #E5E7EB" }}>
+                            <th style={{ textAlign: "left", padding: "8px 10px", color: "#64748B", fontWeight: 600 }}>প্রশ্ন</th>
+                            <th style={{ padding: "8px 10px", color: "#64748B", fontWeight: 600, width: 140, textAlign: "left" as const }}>টপিক</th>
+                            <th style={{ padding: "8px 10px", color: "#64748B", fontWeight: 600, width: 72, textAlign: "center" as const }}>উত্তর</th>
+                            <th style={{ padding: "8px 10px", color: "#64748B", fontWeight: 600, width: 80, textAlign: "center" as const }}>কঠিনতা</th>
+                            <th style={{ padding: "8px 10px", width: 48 }}></th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                        </thead>
+                        <tbody>
+                          {filtered.map((q) => (
+                            <tr key={q.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                              <td style={{ padding: "10px", maxWidth: 360 }}>{q.text.slice(0, 90)}{q.text.length > 90 ? "..." : ""}</td>
+                              <td style={{ padding: "10px" }}>
+                                {q.topic ? (
+                                  <span style={{ ...s.tag, background: "#EFF6FF", color: "#1D4ED8", maxWidth: 130, display: "inline-block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }} title={q.topic}>
+                                    {q.topic}
+                                  </span>
+                                ) : (
+                                  <span style={{ color: "#CBD5E1", fontSize: 12 }}>—</span>
+                                )}
+                              </td>
+                              <td style={{ padding: "10px", textAlign: "center" }}>
+                                <span style={{ ...s.tag, background: "#D1FAE5", color: "#047857" }}>{q.correctAnswer}</span>
+                              </td>
+                              <td style={{ padding: "10px", textAlign: "center" }}>
+                                <span style={{ ...s.tag, background: q.difficulty === "hard" ? "#FEE2E2" : q.difficulty === "easy" ? "#D1FAE5" : "#FEF3C7", color: q.difficulty === "hard" ? "#B91C1C" : q.difficulty === "easy" ? "#047857" : "#B45309" }}>
+                                  {q.difficulty === "easy" ? "সহজ" : q.difficulty === "hard" ? "কঠিন" : "মাঝারি"}
+                                </span>
+                              </td>
+                              <td style={{ padding: "10px", textAlign: "center" }}>
+                                <button onClick={() => deleteQuestion(q.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#EF4444", fontSize: 16 }} title="মুছুন">🗑️</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12 }}>
                   <button style={{ ...s.btn, background: qPage <= 1 ? "#E5E7EB" : "#047857", color: qPage <= 1 ? "#94A3B8" : "#fff" }} onClick={() => setQPage((p) => Math.max(1, p - 1))} disabled={qPage <= 1}>← আগের</button>
                   <span style={{ color: "#64748B", fontSize: 14, alignSelf: "center" }}>পেজ {qPage}</span>
