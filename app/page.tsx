@@ -183,6 +183,7 @@ export default function LandingPage() {
             <a href="#features" style={{ color: "#64748B", textDecoration: "none", fontSize: 14 }}>ফিচার</a>
             <a href="#categories" style={{ color: "#64748B", textDecoration: "none", fontSize: 14 }}>বিভাগ</a>
             <Link href="/privacy-policy" style={{ color: "#64748B", textDecoration: "none", fontSize: 14 }}>Privacy Policy</Link>
+            <Link href="/data-deletion" style={{ color: "#64748B", textDecoration: "none", fontSize: 14 }}>Account & Data Deletion</Link>
           </div>
           <p style={{ fontSize: 13, color: "#475569" }}>© 2025 Promise Jobs. সর্বস্বত্ব সংরক্ষিত।</p>
         </div>

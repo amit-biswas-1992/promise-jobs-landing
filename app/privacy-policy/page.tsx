@@ -69,7 +69,11 @@ export default function PrivacyPolicyPage() {
         <div>
           <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>৬. আপনার অধিকার</h2>
           <p>
-            আপনি চাইলে আপনার অ্যাকাউন্ট ডিলিট বা নির্দিষ্ট ডেটা মুছে ফেলার অনুরোধ করতে পারেন। এ বিষয়ে সহায়তার জন্য নিচের ইমেইলে যোগাযোগ করুন।
+            আপনি চাইলে আপনার অ্যাকাউন্ট ডিলিট বা নির্দিষ্ট ডেটা মুছে ফেলার অনুরোধ করতে পারেন। এর জন্য{" "}
+            <Link href="/data-deletion" style={{ color: "#047857", textDecoration: "underline" }}>
+              Account &amp; Data Deletion
+            </Link>{" "}
+            পেইজে দেওয়া নির্দেশনা অনুসরণ করুন, অথবা নিচের ইমেইলে যোগাযোগ করুন।
           </p>
         </div>
 
