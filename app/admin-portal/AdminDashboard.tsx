@@ -132,7 +132,7 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
             {n.icon} {n.label}
           </button>
         ))}
-        <div style={{ marginTop: "auto", padding: "20px", borderTop: "1px solid rgba(255,255,255,0.1)", marginTop: 40 }}>
+        <div style={{ padding: "20px", borderTop: "1px solid rgba(255,255,255,0.1)", marginTop: 40 }}>
           <button onClick={onLogout} style={{ ...s.navBtn, color: "#F87171" }}>🚪 লগআউট</button>
         </div>
       </div>
