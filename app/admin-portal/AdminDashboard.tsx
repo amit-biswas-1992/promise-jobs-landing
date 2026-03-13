@@ -45,10 +45,36 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
   const [addingE, setAddingE] = useState(false);
   const [msg, setMsg] = useState("");
 
+  // --- Roles tab state ---
+  const [permissions, setPermissions] = useState<any[]>([]);
+  const [roleConfig, setRoleConfig] = useState<Record<string, string[]>>({});
+  const [checkedPerms, setCheckedPerms] = useState<Record<string, Record<string, boolean>>>({});
+  const [savingRole, setSavingRole] = useState<string | null>(null);
+
+  // --- Users tab additions ---
+  const [showStaffModal, setShowStaffModal] = useState(false);
+  const [newStaff, setNewStaff] = useState({ phone: "", pass: "", name: "", role: "contributor" });
+  const [creatingStaff, setCreatingStaff] = useState(false);
+  const [updatingRoleId, setUpdatingRoleId] = useState<string | null>(null);
+
   useEffect(() => { if (tab === "overview") loadStats(); }, [tab]);
   useEffect(() => { if (tab === "questions") loadQuestions(); }, [tab, selCat, qPage]);
   useEffect(() => { if (tab === "exams") loadExams(); }, [tab]);
   useEffect(() => { if (tab === "users") loadUsers(); }, [tab, userPage]);
+  useEffect(() => { if (tab === "roles") loadPermissions(); }, [tab]);
+
+  // Sync checkedPerms when roleConfig or permissions load
+  useEffect(() => {
+    if (!permissions.length) return;
+    const init: Record<string, Record<string, boolean>> = {};
+    ["admin", "contributor"].forEach((role) => {
+      init[role] = {};
+      permissions.forEach((p) => {
+        init[role][p.action] = (roleConfig[role] || []).includes(p.action);
+      });
+    });
+    setCheckedPerms(init);
+  }, [roleConfig, permissions]);
 
   const loadStats = async () => {
     const s = await apiCall("/admin/stats", token);
@@ -65,6 +91,12 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
     const r = await apiCall(`/admin/users?page=${userPage}`, token);
     setUsers(r.data || []);
     setUserTotal(r.total || 0);
+  };
+
+  const loadPermissions = async () => {
+    const r = await apiCall("/admin/permissions", token);
+    setPermissions(r.permissions || []);
+    setRoleConfig(r.roleConfig || {});
   };
 
   const deleteQuestion = async (id: string) => {
@@ -102,6 +134,54 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
     setTimeout(() => setMsg(""), 3000);
   };
 
+  const saveRolePermissions = async (role: string) => {
+    setSavingRole(role);
+    try {
+      const actions = Object.entries(checkedPerms[role] || {})
+        .filter(([, checked]) => checked)
+        .map(([action]) => action);
+      await apiCall(`/admin/permissions/roles/${role}`, token, {
+        method: "PATCH",
+        body: { permissions: actions },
+      });
+      setMsg("✅ অনুমতি সংরক্ষিত হয়েছে");
+      loadPermissions();
+    } catch { setMsg("❌ ত্রুটি হয়েছে"); }
+    setSavingRole(null);
+    setTimeout(() => setMsg(""), 3000);
+  };
+
+  const changeUserRole = async (userId: string, newRole: string) => {
+    setUpdatingRoleId(userId);
+    try {
+      await apiCall(`/admin/users/${userId}/role`, token, {
+        method: "PATCH",
+        body: { role: newRole },
+      });
+      loadUsers();
+    } catch { setMsg("❌ ভূমিকা পরিবর্তন ব্যর্থ"); }
+    setUpdatingRoleId(null);
+    setTimeout(() => setMsg(""), 3000);
+  };
+
+  const createStaff = async () => {
+    if (!newStaff.phone || !newStaff.pass) {
+      setMsg("❌ ফোন ও পাসওয়ার্ড আবশ্যিক");
+      setTimeout(() => setMsg(""), 3000);
+      return;
+    }
+    setCreatingStaff(true);
+    try {
+      await apiCall("/admin/users/create-staff", token, { method: "POST", body: newStaff });
+      setMsg("✅ স্টাফ তৈরি হয়েছে");
+      setShowStaffModal(false);
+      setNewStaff({ phone: "", pass: "", name: "", role: "contributor" });
+      loadUsers();
+    } catch { setMsg("❌ ত্রুটি হয়েছে"); }
+    setCreatingStaff(false);
+    setTimeout(() => setMsg(""), 3000);
+  };
+
   const s: Record<string, any> = {
     wrap: { display: "flex", minHeight: "100vh", fontFamily: "'Hind Siliguri',Arial,sans-serif" },
     sidebar: { width: 220, background: "#0F172A", padding: "24px 0", flexShrink: 0 },
@@ -117,6 +197,13 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
     btn: { background: "#047857", color: "#fff", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 15, fontWeight: 700, cursor: "pointer" },
     tag: { display: "inline-block", padding: "3px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600 },
   };
+
+  // Group permissions by groupLabel for the matrix table
+  const groupedPermissions = permissions.reduce((acc: Record<string, any[]>, p: any) => {
+    if (!acc[p.groupLabel]) acc[p.groupLabel] = [];
+    acc[p.groupLabel].push(p);
+    return acc;
+  }, {});
 
   return (
     <div style={s.wrap}>
@@ -143,7 +230,7 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
           <h1 style={{ fontWeight: 800, fontSize: 20, margin: 0 }}>
             {NAV.find((n) => n.id === tab)?.icon} {NAV.find((n) => n.id === tab)?.label}
           </h1>
-          {msg && <div style={{ background: "#D1FAE5", color: "#047857", padding: "6px 14px", borderRadius: 8, fontSize: 14, fontWeight: 600 }}>{msg}</div>}
+          {msg && <div style={{ background: msg.startsWith("✅") ? "#D1FAE5" : "#FEE2E2", color: msg.startsWith("✅") ? "#047857" : "#B91C1C", padding: "6px 14px", borderRadius: 8, fontSize: 14, fontWeight: 600 }}>{msg}</div>}
         </div>
 
         <div style={s.body}>
@@ -329,6 +416,7 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
             <div style={s.card}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                 <h3 style={{ fontWeight: 800, margin: 0 }}>ব্যবহারকারী ({userTotal})</h3>
+                <button style={s.btn} onClick={() => setShowStaffModal(true)}>➕ নতুন স্টাফ তৈরি করুন</button>
               </div>
               {users.length === 0 ? (
                 <p style={{ color: "#94A3B8", textAlign: "center", padding: 20 }}>কোনো ব্যবহারকারী নেই</p>
@@ -338,7 +426,7 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
                     <thead>
                       <tr style={{ borderBottom: "1px solid #E5E7EB" }}>
                         <th style={{ textAlign: "left", padding: "8px 10px", color: "#64748B", fontWeight: 600 }}>নাম / ফোন</th>
-                        <th style={{ padding: "8px 10px", color: "#64748B", fontWeight: 600, width: 100 }}>ভূমিকা</th>
+                        <th style={{ padding: "8px 10px", color: "#64748B", fontWeight: 600, width: 160 }}>ভূমিকা</th>
                         <th style={{ padding: "8px 10px", color: "#64748B", fontWeight: 600, width: 80 }}>পরীক্ষা</th>
                         <th style={{ padding: "8px 10px", color: "#64748B", fontWeight: 600, width: 80 }}>স্কোর</th>
                       </tr>
@@ -351,9 +439,25 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
                             <div style={{ fontSize: 12, color: "#94A3B8" }}>+{u.phone}</div>
                           </td>
                           <td style={{ padding: "10px", textAlign: "center" }}>
-                            <span style={{ ...s.tag, background: u.role === "admin" ? "#D1FAE5" : u.role === "contributor" ? "#EDE9FE" : "#DBEAFE", color: u.role === "admin" ? "#047857" : u.role === "contributor" ? "#6D28D9" : "#1D4ED8" }}>
-                              {u.role === "admin" ? "অ্যাডমিন" : u.role === "contributor" ? "কন্ট্রিবিউটর" : "শিক্ষার্থী"}
-                            </span>
+                            <select
+                              value={u.role}
+                              onChange={(e) => changeUserRole(u.id, e.target.value)}
+                              disabled={updatingRoleId === u.id}
+                              style={{
+                                border: "1.5px solid #E5E7EB",
+                                borderRadius: 8,
+                                padding: "4px 8px",
+                                fontSize: 13,
+                                cursor: "pointer",
+                                background: u.role === "admin" ? "#D1FAE5" : u.role === "contributor" ? "#EDE9FE" : "#F1F5F9",
+                                color: u.role === "admin" ? "#047857" : u.role === "contributor" ? "#6D28D9" : "#475569",
+                                fontWeight: 600,
+                              }}
+                            >
+                              <option value="student">শিক্ষার্থী</option>
+                              <option value="contributor">কন্ট্রিবিউটর</option>
+                              <option value="admin">অ্যাডমিন</option>
+                            </select>
                           </td>
                           <td style={{ padding: "10px", textAlign: "center" }}>{u.examsTaken}</td>
                           <td style={{ padding: "10px", textAlign: "center" }}>{u.totalScore}</td>
@@ -373,28 +477,174 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
 
           {/* ROLES */}
           {tab === "roles" && (
-            <div style={s.card}>
-              <h3 style={{ fontWeight: 800, marginBottom: 16 }}>ভূমিকা ও অনুমতি</h3>
-              {[
-                { role: "admin", label: "অ্যাডমিন", color: "#047857", perms: ["সব কিছু দেখা", "প্রশ্ন যোগ/সম্পাদনা", "পরীক্ষা তৈরি", "ব্যবহারকারী ব্যবস্থাপনা", "ভূমিকা নির্ধারণ"] },
-                { role: "contributor", label: "কন্ট্রিবিউটর", color: "#6D28D9", perms: ["সব প্রশ্ন দেখা", "নতুন প্রশ্ন যোগ করা"] },
-                { role: "student", label: "শিক্ষার্থী", color: "#1D4ED8", perms: ["পরীক্ষায় অংশগ্রহণ", "ফলাফল দেখা", "লিডারবোর্ড দেখা"] },
-              ].map((r) => (
-                <div key={r.role} style={{ marginBottom: 16, padding: 16, border: `1.5px solid ${r.color}30`, borderRadius: 12, background: `${r.color}08` }}>
-                  <div style={{ fontWeight: 800, color: r.color, fontSize: 16, marginBottom: 8 }}>{r.label}</div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {r.perms.map((p) => (
-                      <span key={p} style={{ background: `${r.color}15`, color: r.color, padding: "4px 12px", borderRadius: 999, fontSize: 13, fontWeight: 600 }}>✓ {p}</span>
-                    ))}
+            <>
+              <div style={s.card}>
+                <h3 style={{ fontWeight: 800, marginBottom: 4 }}>ভূমিকা ও অনুমতি ম্যাট্রিক্স</h3>
+                <p style={{ color: "#64748B", fontSize: 14, marginBottom: 20 }}>প্রতিটি ভূমিকার জন্য অনুমতি চেক/আনচেক করুন, তারপর সংরক্ষণ করুন।</p>
+
+                {permissions.length === 0 ? (
+                  <p style={{ color: "#94A3B8", textAlign: "center", padding: 20 }}>লোড হচ্ছে...</p>
+                ) : (
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                      <thead>
+                        <tr style={{ borderBottom: "2px solid #E5E7EB" }}>
+                          <th style={{ textAlign: "left", padding: "10px 12px", color: "#374151", fontWeight: 700, width: "50%" }}>অনুমতি</th>
+                          <th style={{ padding: "10px 12px", color: "#047857", fontWeight: 700, width: "25%", textAlign: "center" }}>🔑 অ্যাডমিন</th>
+                          <th style={{ padding: "10px 12px", color: "#6D28D9", fontWeight: 700, width: "25%", textAlign: "center" }}>✏️ কন্ট্রিবিউটর</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(groupedPermissions).map(([group, perms]: [string, any[]]) => (
+                          <>
+                            <tr key={`group-${group}`}>
+                              <td colSpan={3} style={{ background: "#F8FAFC", fontWeight: 800, padding: "8px 12px", color: "#374151", fontSize: 13, borderBottom: "1px solid #E5E7EB", letterSpacing: "0.05em" }}>
+                                📁 {group}
+                              </td>
+                            </tr>
+                            {perms.map((perm: any) => (
+                              <tr key={perm.action} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                                <td style={{ padding: "10px 12px" }}>
+                                  <div style={{ fontWeight: 500 }}>{perm.labelBn}</div>
+                                  <div style={{ fontSize: 11, color: "#94A3B8", fontFamily: "monospace" }}>{perm.action}</div>
+                                </td>
+                                {["admin", "contributor"].map((role) => {
+                                  const isAdminLocked = role === "admin" && ["roles.manage", "stats.view"].includes(perm.action);
+                                  const checked = checkedPerms[role]?.[perm.action] ?? false;
+                                  return (
+                                    <td key={role} style={{ textAlign: "center", padding: "10px 12px" }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={isAdminLocked ? true : checked}
+                                        disabled={isAdminLocked}
+                                        onChange={(e) => {
+                                          if (isAdminLocked) return;
+                                          setCheckedPerms((prev) => ({
+                                            ...prev,
+                                            [role]: { ...prev[role], [perm.action]: e.target.checked },
+                                          }));
+                                        }}
+                                        style={{ width: 18, height: 18, cursor: isAdminLocked ? "not-allowed" : "pointer", accentColor: role === "admin" ? "#047857" : "#6D28D9" }}
+                                      />
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </>
+                        ))}
+                        {/* Save row */}
+                        <tr style={{ borderTop: "2px solid #E5E7EB", background: "#F8FAFC" }}>
+                          <td style={{ padding: "12px" }}></td>
+                          {["admin", "contributor"].map((role) => (
+                            <td key={role} style={{ padding: "12px", textAlign: "center" }}>
+                              <button
+                                style={{
+                                  ...s.btn,
+                                  background: role === "admin" ? "#047857" : "#6D28D9",
+                                  fontSize: 13,
+                                  padding: "8px 20px",
+                                  opacity: savingRole === role ? 0.6 : 1,
+                                }}
+                                onClick={() => saveRolePermissions(role)}
+                                disabled={savingRole === role}
+                              >
+                                {savingRole === role ? "সংরক্ষণ হচ্ছে..." : "💾 সংরক্ষণ করুন"}
+                              </button>
+                            </td>
+                          ))}
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
-                </div>
-              ))}
-              <p style={{ color: "#94A3B8", fontSize: 14, marginTop: 8 }}>ভবিষ্যতে ডায়নামিক পারমিশন সিস্টেম যুক্ত করা হবে।</p>
-            </div>
+                )}
+              </div>
+
+              {/* Role summary cards */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                {[
+                  { role: "admin", label: "অ্যাডমিন", color: "#047857" },
+                  { role: "contributor", label: "কন্ট্রিবিউটর", color: "#6D28D9" },
+                ].map((r) => (
+                  <div key={r.role} style={{ ...s.card, marginBottom: 0, borderLeft: `4px solid ${r.color}` }}>
+                    <div style={{ fontWeight: 800, color: r.color, fontSize: 15, marginBottom: 8 }}>{r.label}</div>
+                    <div style={{ fontSize: 13, color: "#64748B" }}>
+                      {(roleConfig[r.role] || []).length} টি অনুমতি সক্রিয়
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                      {(roleConfig[r.role] || []).slice(0, 5).map((a: string) => (
+                        <span key={a} style={{ background: `${r.color}15`, color: r.color, padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600 }}>
+                          {permissions.find((p: any) => p.action === a)?.labelBn || a}
+                        </span>
+                      ))}
+                      {(roleConfig[r.role] || []).length > 5 && (
+                        <span style={{ color: "#94A3B8", fontSize: 11, alignSelf: "center" }}>+{(roleConfig[r.role] || []).length - 5} আরো</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
 
         </div>
       </div>
+
+      {/* Staff Creation Modal */}
+      {showStaffModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", maxHeight: "90vh", overflow: "auto" }}>
+            <h3 style={{ fontWeight: 800, marginBottom: 20, fontSize: 18 }}>➕ নতুন স্টাফ তৈরি করুন</h3>
+
+            <label style={s.label}>📱 ফোন নম্বর *</label>
+            <input
+              value={newStaff.phone}
+              onChange={(e) => setNewStaff({ ...newStaff, phone: e.target.value })}
+              style={s.input}
+              placeholder="01XXXXXXXXX"
+            />
+
+            <label style={s.label}>🔒 পাসওয়ার্ড *</label>
+            <input
+              type="password"
+              value={newStaff.pass}
+              onChange={(e) => setNewStaff({ ...newStaff, pass: e.target.value })}
+              style={s.input}
+              placeholder="ন্যূনতম ৬ অক্ষর"
+            />
+
+            <label style={s.label}>👤 নাম (ঐচ্ছিক)</label>
+            <input
+              value={newStaff.name}
+              onChange={(e) => setNewStaff({ ...newStaff, name: e.target.value })}
+              style={s.input}
+              placeholder="স্টাফের নাম"
+            />
+
+            <label style={s.label}>🔐 ভূমিকা</label>
+            <select
+              value={newStaff.role}
+              onChange={(e) => setNewStaff({ ...newStaff, role: e.target.value })}
+              style={s.input}
+            >
+              <option value="contributor">কন্ট্রিবিউটর — প্রশ্ন যোগ করতে পারবেন</option>
+              <option value="admin">অ্যাডমিন — সব কিছু করতে পারবেন</option>
+            </select>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+              <button style={{ ...s.btn, flex: 1 }} onClick={createStaff} disabled={creatingStaff}>
+                {creatingStaff ? "তৈরি হচ্ছে..." : "✅ তৈরি করুন"}
+              </button>
+              <button
+                style={{ ...s.btn, background: "#6B7280", flex: 1 }}
+                onClick={() => { setShowStaffModal(false); setNewStaff({ phone: "", pass: "", name: "", role: "contributor" }); }}
+              >
+                বাতিল
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
