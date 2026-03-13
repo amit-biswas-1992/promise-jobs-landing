@@ -178,10 +178,11 @@ export default function LandingPage() {
             <span style={{ color: "#fff", fontWeight: 800, fontSize: 18 }}>Promise Jobs</span>
           </div>
           <p style={{ fontSize: 14, marginBottom: 12 }}>বাংলাদেশের সেরা চাকরির পরীক্ষা প্রস্তুতি প্ল্যাটফর্ম</p>
-          <div style={{ display: "flex", justifyContent: "center", gap: 24, marginBottom: 20 }}>
+          <div style={{ display: "flex", justifyContent: "center", gap: 24, marginBottom: 20, flexWrap: "wrap" }}>
             <Link href="/admin-portal" style={{ color: "#64748B", textDecoration: "none", fontSize: 14 }}>অ্যাডমিন পোর্টাল</Link>
             <a href="#features" style={{ color: "#64748B", textDecoration: "none", fontSize: 14 }}>ফিচার</a>
             <a href="#categories" style={{ color: "#64748B", textDecoration: "none", fontSize: 14 }}>বিভাগ</a>
+            <Link href="/privacy-policy" style={{ color: "#64748B", textDecoration: "none", fontSize: 14 }}>Privacy Policy</Link>
           </div>
           <p style={{ fontSize: 13, color: "#475569" }}>© 2025 Promise Jobs. সর্বস্বত্ব সংরক্ষিত।</p>
         </div>
