@@ -8,6 +8,7 @@ const NAV = [
   { id: "questions", label: "প্রশ্নসমূহ", icon: "❓" },
   { id: "exams", label: "পরীক্ষা", icon: "📝" },
   { id: "solutions", label: "বিসিএস ও ব্যাংক সমাধান", icon: "📚" },
+  { id: "features", label: "বিশেষ ফিচার", icon: "🎯" },
   { id: "users", label: "ব্যবহারকারী", icon: "👥" },
   { id: "roles", label: "ভূমিকা ও অনুমতি", icon: "🔐" },
 ];
@@ -58,6 +59,16 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
   // --- Solutions tab state ---
   const [bcsSolutions, setBcsSolutions] = useState<any[]>([]);
   const [solutionsFilter, setSolutionsFilter] = useState<"all" | "bcs" | "bank">("all");
+  const [participationStats, setParticipationStats] = useState<any[]>([]);
+  const [participationLog, setParticipationLog] = useState<any[]>([]);
+  const [participationLogTotal, setParticipationLogTotal] = useState(0);
+  const [showParticipationModal, setShowParticipationModal] = useState(false);
+  const [selectedExamCode, setSelectedExamCode] = useState<string | null>(null);
+
+  // --- Home Features tab state ---
+  const [homeFeatures, setHomeFeatures] = useState<any[]>([]);
+  const [editingFeature, setEditingFeature] = useState<any | null>(null);
+  const [savingFeature, setSavingFeature] = useState<string | null>(null);
 
   // --- Users tab additions ---
   const [showStaffModal, setShowStaffModal] = useState(false);
@@ -70,7 +81,8 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
   useEffect(() => { if (tab === "exams") loadExams(); }, [tab]);
   useEffect(() => { if (tab === "users") loadUsers(); }, [tab, userPage]);
   useEffect(() => { if (tab === "roles") loadPermissions(); }, [tab]);
-  useEffect(() => { if (tab === "solutions") loadSolutions(); }, [tab]);
+  useEffect(() => { if (tab === "solutions") { loadSolutions(); loadParticipationStats(); } }, [tab]);
+  useEffect(() => { if (tab === "features") loadHomeFeatures(); }, [tab]);
 
   // Sync checkedPerms when roleConfig or permissions load
   useEffect(() => {
@@ -123,6 +135,44 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
   const loadSolutions = async () => {
     const r = await apiCall("/bcs-solutions/exams", token);
     setBcsSolutions(Array.isArray(r) ? r : []);
+  };
+
+  const loadParticipationStats = async () => {
+    const r = await apiCall("/bcs-solutions/admin/participation-stats", token);
+    setParticipationStats(Array.isArray(r) ? r : []);
+  };
+
+  const loadParticipationLog = async (examCode: string) => {
+    const r = await apiCall(`/bcs-solutions/admin/participation-log/${examCode}?limit=50`, token);
+    setParticipationLog(r.data || []);
+    setParticipationLogTotal(r.total || 0);
+  };
+
+  const openParticipationLog = async (examCode: string) => {
+    setSelectedExamCode(examCode);
+    setShowParticipationModal(true);
+    await loadParticipationLog(examCode);
+  };
+
+  const loadHomeFeatures = async () => {
+    const r = await apiCall("/home-features/admin/all", token);
+    setHomeFeatures(Array.isArray(r) ? r : []);
+  };
+
+  const saveFeature = async (key: string, updates: any) => {
+    setSavingFeature(key);
+    try {
+      await apiCall(`/home-features/admin/${key}`, token, { method: "PATCH", body: updates });
+      setMsg("✅ ফিচার সংরক্ষিত হয়েছে");
+      setEditingFeature(null);
+      loadHomeFeatures();
+    } catch { setMsg("❌ ত্রুটি হয়েছে"); }
+    setSavingFeature(null);
+    setTimeout(() => setMsg(""), 3000);
+  };
+
+  const toggleFeatureVisibility = async (key: string, isVisible: boolean) => {
+    await saveFeature(key, { isVisible });
   };
 
   const submitQuestion = async () => {
@@ -546,6 +596,7 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
                           <th style={{ textAlign: "center", padding: "10px 12px", color: "#374151", fontWeight: 700, width: 120 }}>তারিখ</th>
                           <th style={{ textAlign: "center", padding: "10px 12px", color: "#374151", fontWeight: 700, width: 80 }}>প্রশ্ন</th>
                           <th style={{ textAlign: "center", padding: "10px 12px", color: "#374151", fontWeight: 700, width: 90 }}>সময়</th>
+                          <th style={{ textAlign: "center", padding: "10px 12px", color: "#374151", fontWeight: 700, width: 110 }}>👀 দর্শক</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -557,6 +608,7 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
                           )
                           .map((e) => {
                             const isBank = e.examCode.startsWith("bank_");
+                            const pStat = participationStats.find((p) => p.examCode === e.examCode);
                             return (
                               <tr key={e.examCode} style={{ borderBottom: "1px solid #F1F5F9" }}>
                                 <td style={{ padding: "10px 12px" }}>
@@ -573,6 +625,20 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
                                   <span style={{ fontWeight: 800, fontSize: 16, color: isBank ? "#1D4ED8" : "#047857" }}>{e.totalQuestions}</span>
                                 </td>
                                 <td style={{ padding: "10px 12px", textAlign: "center", color: "#64748B", fontSize: 13 }}>{e.durationMinutes} মিনিট</td>
+                                <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                                  {pStat ? (
+                                    <button
+                                      onClick={() => openParticipationLog(e.examCode)}
+                                      style={{ background: "none", border: "none", cursor: "pointer", textAlign: "center" }}
+                                      title="অংশগ্রহণকারীদের লগ দেখুন"
+                                    >
+                                      <div style={{ fontWeight: 800, fontSize: 15, color: "#047857" }}>{pStat.totalViews}</div>
+                                      <div style={{ fontSize: 11, color: "#94A3B8" }}>{pStat.uniqueUsers} জন</div>
+                                    </button>
+                                  ) : (
+                                    <span style={{ color: "#CBD5E1", fontSize: 13 }}>০</span>
+                                  )}
+                                </td>
                               </tr>
                             );
                           })}
@@ -581,6 +647,77 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
                   </div>
                 )}
               </div>
+            </>
+          )}
+
+          {/* HOME FEATURES */}
+          {tab === "features" && (
+            <>
+              <div style={{ marginBottom: 16, color: "#64748B", fontSize: 14, background: "#FFF7ED", border: "1px solid #FDE68A", borderRadius: 10, padding: "10px 16px" }}>
+                💡 এই ফিচার কার্ডগুলো অ্যাপের হোম স্ক্রিনে "বিশেষ ফিচার" সেকশনে দেখা যায়। আপনি প্রতিটি কার্ডের শিরোনাম, বিবরণ, ব্যাজ, স্ট্যাটস ও দৃশ্যমানতা পরিবর্তন করতে পারবেন।
+              </div>
+
+              {homeFeatures.length === 0 ? (
+                <div style={{ ...s.card, textAlign: "center", color: "#94A3B8" }}>লোড হচ্ছে...</div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(340px,1fr))", gap: 20 }}>
+                  {homeFeatures.map((f) => (
+                    <div key={f.key} style={{ ...s.card, marginBottom: 0, borderLeft: `4px solid ${f.gradientColors?.[0] || "#047857"}`, opacity: f.isVisible ? 1 : 0.55 }}>
+                      {/* Card header */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                        <div style={{ width: 48, height: 48, borderRadius: 12, background: f.gradientColors?.[0] + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>
+                          {f.iconEmoji}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 800, fontSize: 15, color: "#1E293B" }}>{f.titleBn}</div>
+                          <div style={{ fontSize: 12, color: "#94A3B8" }}>{f.subtitleBn}</div>
+                        </div>
+                        {/* Visibility toggle */}
+                        <button
+                          onClick={() => toggleFeatureVisibility(f.key, !f.isVisible)}
+                          disabled={savingFeature === f.key}
+                          style={{ border: "none", borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700, background: f.isVisible ? "#D1FAE5" : "#F1F5F9", color: f.isVisible ? "#047857" : "#94A3B8" }}
+                        >
+                          {f.isVisible ? "✅ দৃশ্যমান" : "🚫 লুকানো"}
+                        </button>
+                      </div>
+
+                      {/* Badge */}
+                      {f.badgeText && (
+                        <div style={{ marginBottom: 10 }}>
+                          <span style={{ background: f.badgeBgColor || "#D1FAE5", color: f.badgeTextColor || "#047857", padding: "3px 10px", borderRadius: 999, fontSize: 12, fontWeight: 700 }}>
+                            {f.badgeText}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Stats */}
+                      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                        {(f.stats || []).map((st: any, i: number) => (
+                          <div key={i} style={{ flex: 1, background: "#F8FAFC", borderRadius: 8, padding: "6px 8px", textAlign: "center" }}>
+                            <div style={{ fontWeight: 800, fontSize: 14, color: "#1E293B" }}>{st.v}</div>
+                            <div style={{ fontSize: 10, color: "#94A3B8" }}>{st.l}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Route info */}
+                      <div style={{ fontSize: 12, color: "#94A3B8", marginBottom: 12 }}>
+                        🔗 নেভিগেশন: <code style={{ background: "#F1F5F9", padding: "2px 6px", borderRadius: 4, fontFamily: "monospace" }}>{f.navRoute}</code>
+                        &nbsp;·&nbsp;ক্রম: {f.order}
+                      </div>
+
+                      {/* Edit button */}
+                      <button
+                        style={{ ...s.btn, width: "100%", fontSize: 13 }}
+                        onClick={() => setEditingFeature({ ...f })}
+                      >
+                        ✏️ সম্পাদনা করুন
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
           )}
 
@@ -762,6 +899,132 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
 
         </div>
       </div>
+
+      {/* Participation Log Modal */}
+      {showParticipationModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: 560, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", maxHeight: "85vh", display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h3 style={{ fontWeight: 800, margin: 0 }}>
+                👀 অংশগ্রহণ লগ — <code style={{ fontFamily: "monospace", fontSize: 13, background: "#F1F5F9", padding: "2px 8px", borderRadius: 4 }}>{selectedExamCode}</code>
+              </h3>
+              <button onClick={() => setShowParticipationModal(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#94A3B8" }}>✕</button>
+            </div>
+            <div style={{ marginBottom: 12, display: "flex", gap: 12 }}>
+              {(() => {
+                const st = participationStats.find((p) => p.examCode === selectedExamCode);
+                return st ? (
+                  <>
+                    <div style={{ flex: 1, background: "#F0FDF4", borderRadius: 10, padding: "10px 14px", textAlign: "center" }}>
+                      <div style={{ fontWeight: 800, fontSize: 22, color: "#047857" }}>{st.totalViews}</div>
+                      <div style={{ fontSize: 12, color: "#64748B" }}>মোট ভিজিট</div>
+                    </div>
+                    <div style={{ flex: 1, background: "#EFF6FF", borderRadius: 10, padding: "10px 14px", textAlign: "center" }}>
+                      <div style={{ fontWeight: 800, fontSize: 22, color: "#1D4ED8" }}>{st.uniqueUsers}</div>
+                      <div style={{ fontSize: 12, color: "#64748B" }}>অনন্য ব্যবহারকারী</div>
+                    </div>
+                  </>
+                ) : null;
+              })()}
+            </div>
+            <div style={{ overflow: "auto", flex: 1 }}>
+              {participationLog.length === 0 ? (
+                <p style={{ textAlign: "center", color: "#94A3B8", padding: 20 }}>কোনো লগ নেই</p>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: "#F8FAFC", borderBottom: "2px solid #E5E7EB" }}>
+                      <th style={{ padding: "8px 12px", textAlign: "left", color: "#374151", fontWeight: 700 }}>ব্যবহারকারী</th>
+                      <th style={{ padding: "8px 12px", textAlign: "left", color: "#374151", fontWeight: 700 }}>সময়</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {participationLog.map((log) => (
+                      <tr key={log.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                        <td style={{ padding: "8px 12px" }}>
+                          {log.userPhone ? (
+                            <span style={{ fontFamily: "monospace", fontSize: 12 }}>+{log.userPhone}</span>
+                          ) : log.userId ? (
+                            <span style={{ color: "#64748B", fontSize: 12 }}>User ID: {log.userId.slice(0, 8)}...</span>
+                          ) : (
+                            <span style={{ color: "#CBD5E1", fontSize: 12 }}>অজ্ঞাত</span>
+                          )}
+                        </td>
+                        <td style={{ padding: "8px 12px", color: "#64748B", fontSize: 12 }}>
+                          {new Date(log.viewedAt).toLocaleString("bn-BD")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {participationLogTotal > 50 && (
+                <p style={{ textAlign: "center", color: "#94A3B8", fontSize: 12, marginTop: 8 }}>
+                  প্রথম ৫০টি দেখানো হচ্ছে · মোট {participationLogTotal}টি
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Feature Edit Modal */}
+      {editingFeature && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: 500, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", maxHeight: "90vh", overflow: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <h3 style={{ fontWeight: 800, margin: 0 }}>✏️ ফিচার সম্পাদনা — {editingFeature.iconEmoji} {editingFeature.titleBn}</h3>
+              <button onClick={() => setEditingFeature(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#94A3B8" }}>✕</button>
+            </div>
+
+            <label style={s.label}>শিরোনাম (বাংলা)</label>
+            <input value={editingFeature.titleBn} onChange={(e) => setEditingFeature({ ...editingFeature, titleBn: e.target.value })} style={s.input} />
+
+            <label style={s.label}>বিবরণ / সাবটাইটেল</label>
+            <input value={editingFeature.subtitleBn} onChange={(e) => setEditingFeature({ ...editingFeature, subtitleBn: e.target.value })} style={s.input} />
+
+            <label style={s.label}>আইকন (ইমোজি)</label>
+            <input value={editingFeature.iconEmoji} onChange={(e) => setEditingFeature({ ...editingFeature, iconEmoji: e.target.value })} style={{ ...s.input, fontSize: 22 }} />
+
+            <label style={s.label}>ব্যাজ টেক্সট (খালি রাখলে ব্যাজ দেখাবে না)</label>
+            <input value={editingFeature.badgeText || ""} onChange={(e) => setEditingFeature({ ...editingFeature, badgeText: e.target.value || null })} style={s.input} placeholder="যেমন: নতুন, ব্যাখ্যাসহ..." />
+
+            <label style={s.label}>স্ট্যাটস (JSON) — [&#123;"v":"৩০+","l":"🇧🇩 বাংলাদেশ"&#125;, ...]</label>
+            <textarea
+              value={JSON.stringify(editingFeature.stats, null, 2)}
+              onChange={(e) => {
+                try {
+                  const parsed = JSON.parse(e.target.value);
+                  setEditingFeature({ ...editingFeature, stats: parsed });
+                } catch {}
+              }}
+              rows={5}
+              style={{ ...s.input, fontFamily: "monospace", fontSize: 12, resize: "vertical" }}
+            />
+
+            <label style={s.label}>ক্রম (ছোট সংখ্যা আগে দেখাবে)</label>
+            <input type="number" value={editingFeature.order} onChange={(e) => setEditingFeature({ ...editingFeature, order: Number(e.target.value) })} style={{ ...s.input, width: 100 }} />
+
+            <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+              <button
+                style={{ ...s.btn, flex: 1 }}
+                onClick={() => saveFeature(editingFeature.key, {
+                  titleBn: editingFeature.titleBn,
+                  subtitleBn: editingFeature.subtitleBn,
+                  iconEmoji: editingFeature.iconEmoji,
+                  badgeText: editingFeature.badgeText,
+                  stats: editingFeature.stats,
+                  order: editingFeature.order,
+                })}
+                disabled={savingFeature === editingFeature.key}
+              >
+                {savingFeature === editingFeature.key ? "সংরক্ষণ হচ্ছে..." : "💾 সংরক্ষণ করুন"}
+              </button>
+              <button style={{ ...s.btn, background: "#6B7280", flex: 1 }} onClick={() => setEditingFeature(null)}>বাতিল</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Staff Creation Modal */}
       {showStaffModal && (
