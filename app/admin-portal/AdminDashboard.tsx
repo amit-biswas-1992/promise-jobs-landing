@@ -119,7 +119,7 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
     try {
       await apiCall("/questions", token, { method: "POST", body: newQ });
       setMsg("✅ প্রশ্ন সংযুক্ত হয়েছে");
-      setNewQ({ categoryId: "bcs", text: "", options: ["ক. ", "খ. ", "গ. ", "ঘ. "], correctAnswer: "ক", explanation: "", difficulty: "medium" });
+      setNewQ({ categoryId: "bcs", text: "", options: ["ক. ", "খ. ", "গ. ", "ঘ. "], correctAnswer: "ক", explanation: "", difficulty: "medium", topic: "" });
       loadQuestions();
     } catch { setMsg("❌ ত্রুটি হয়েছে"); }
     setAddingQ(false);
