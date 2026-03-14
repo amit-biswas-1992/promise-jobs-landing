@@ -7,6 +7,7 @@ const NAV = [
   { id: "overview", label: "ড্যাশবোর্ড", icon: "📊" },
   { id: "questions", label: "প্রশ্নসমূহ", icon: "❓" },
   { id: "exams", label: "পরীক্ষা", icon: "📝" },
+  { id: "solutions", label: "বিসিএস ও ব্যাংক সমাধান", icon: "📚" },
   { id: "users", label: "ব্যবহারকারী", icon: "👥" },
   { id: "roles", label: "ভূমিকা ও অনুমতি", icon: "🔐" },
 ];
@@ -54,6 +55,10 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
   const [checkedPerms, setCheckedPerms] = useState<Record<string, Record<string, boolean>>>({});
   const [savingRole, setSavingRole] = useState<string | null>(null);
 
+  // --- Solutions tab state ---
+  const [bcsSolutions, setBcsSolutions] = useState<any[]>([]);
+  const [solutionsFilter, setSolutionsFilter] = useState<"all" | "bcs" | "bank">("all");
+
   // --- Users tab additions ---
   const [showStaffModal, setShowStaffModal] = useState(false);
   const [newStaff, setNewStaff] = useState({ phone: "", pass: "", name: "", role: "contributor" });
@@ -65,6 +70,7 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
   useEffect(() => { if (tab === "exams") loadExams(); }, [tab]);
   useEffect(() => { if (tab === "users") loadUsers(); }, [tab, userPage]);
   useEffect(() => { if (tab === "roles") loadPermissions(); }, [tab]);
+  useEffect(() => { if (tab === "solutions") loadSolutions(); }, [tab]);
 
   // Sync checkedPerms when roleConfig or permissions load
   useEffect(() => {
@@ -112,6 +118,11 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
   const loadExams = async () => {
     const r = await apiCall("/exams/week", token);
     setExams(Array.isArray(r) ? r : []);
+  };
+
+  const loadSolutions = async () => {
+    const r = await apiCall("/bcs-solutions/exams", token);
+    setBcsSolutions(Array.isArray(r) ? r : []);
   };
 
   const submitQuestion = async () => {
@@ -465,6 +476,108 @@ export default function AdminDashboard({ token, onLogout }: { token: string; onL
                         </span>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* SOLUTIONS */}
+          {tab === "solutions" && (
+            <>
+              {/* Summary cards */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+                <div style={{ ...s.card, marginBottom: 0, borderLeft: "4px solid #047857" }}>
+                  <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600 }}>🎓 মোট বিসিএস পরীক্ষা</div>
+                  <div style={{ fontSize: 32, fontWeight: 900, color: "#047857" }}>
+                    {bcsSolutions.filter((e) => !e.examCode.startsWith("bank_")).length}
+                  </div>
+                  <div style={{ fontSize: 13, color: "#94A3B8" }}>
+                    মোট {bcsSolutions.filter((e) => !e.examCode.startsWith("bank_")).reduce((sum, e) => sum + (e.totalQuestions || 0), 0)} প্রশ্ন
+                  </div>
+                </div>
+                <div style={{ ...s.card, marginBottom: 0, borderLeft: "4px solid #1D4ED8" }}>
+                  <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600 }}>🏦 মোট ব্যাংক পরীক্ষা</div>
+                  <div style={{ fontSize: 32, fontWeight: 900, color: "#1D4ED8" }}>
+                    {bcsSolutions.filter((e) => e.examCode.startsWith("bank_")).length}
+                  </div>
+                  <div style={{ fontSize: 13, color: "#94A3B8" }}>
+                    মোট {bcsSolutions.filter((e) => e.examCode.startsWith("bank_")).reduce((sum, e) => sum + (e.totalQuestions || 0), 0)} প্রশ্ন
+                  </div>
+                </div>
+              </div>
+
+              {/* Exam list */}
+              <div style={s.card}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <h3 style={{ fontWeight: 800, margin: 0 }}>
+                    বছরওয়ারী সমাধান তালিকা ({bcsSolutions.filter((e) =>
+                      solutionsFilter === "all" ? true :
+                      solutionsFilter === "bank" ? e.examCode.startsWith("bank_") :
+                      !e.examCode.startsWith("bank_")
+                    ).length})
+                  </h3>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {[
+                      { id: "all", label: "সব", color: "#374151" },
+                      { id: "bcs", label: "🎓 বিসিএস", color: "#047857" },
+                      { id: "bank", label: "🏦 ব্যাংক", color: "#1D4ED8" },
+                    ].map((f) => (
+                      <button
+                        key={f.id}
+                        onClick={() => setSolutionsFilter(f.id as "all" | "bcs" | "bank")}
+                        style={{ padding: "5px 14px", borderRadius: 999, border: `1.5px solid ${f.color}`, background: solutionsFilter === f.id ? f.color : "transparent", color: solutionsFilter === f.id ? "#fff" : f.color, cursor: "pointer", fontSize: 13, fontWeight: 600 }}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {bcsSolutions.length === 0 ? (
+                  <p style={{ color: "#94A3B8", textAlign: "center", padding: 20 }}>লোড হচ্ছে...</p>
+                ) : (
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                      <thead>
+                        <tr style={{ borderBottom: "2px solid #E5E7EB", background: "#F8FAFC" }}>
+                          <th style={{ textAlign: "left", padding: "10px 12px", color: "#374151", fontWeight: 700, width: 100 }}>ধরন</th>
+                          <th style={{ textAlign: "left", padding: "10px 12px", color: "#374151", fontWeight: 700 }}>পরীক্ষার নাম</th>
+                          <th style={{ textAlign: "center", padding: "10px 12px", color: "#374151", fontWeight: 700, width: 120 }}>তারিখ</th>
+                          <th style={{ textAlign: "center", padding: "10px 12px", color: "#374151", fontWeight: 700, width: 80 }}>প্রশ্ন</th>
+                          <th style={{ textAlign: "center", padding: "10px 12px", color: "#374151", fontWeight: 700, width: 90 }}>সময়</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bcsSolutions
+                          .filter((e) =>
+                            solutionsFilter === "all" ? true :
+                            solutionsFilter === "bank" ? e.examCode.startsWith("bank_") :
+                            !e.examCode.startsWith("bank_")
+                          )
+                          .map((e) => {
+                            const isBank = e.examCode.startsWith("bank_");
+                            return (
+                              <tr key={e.examCode} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                                <td style={{ padding: "10px 12px" }}>
+                                  <span style={{ ...s.tag, background: isBank ? "#DBEAFE" : "#D1FAE5", color: isBank ? "#1D4ED8" : "#047857" }}>
+                                    {isBank ? "🏦 ব্যাংক" : "🎓 বিসিএস"}
+                                  </span>
+                                </td>
+                                <td style={{ padding: "10px 12px" }}>
+                                  <div style={{ fontWeight: 700 }}>{e.titleBn}</div>
+                                  <div style={{ fontSize: 12, color: "#94A3B8" }}>{e.titleEn} · <span style={{ fontFamily: "monospace" }}>{e.examCode}</span></div>
+                                </td>
+                                <td style={{ padding: "10px 12px", textAlign: "center", color: "#64748B", fontSize: 13 }}>{e.examDate}</td>
+                                <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                                  <span style={{ fontWeight: 800, fontSize: 16, color: isBank ? "#1D4ED8" : "#047857" }}>{e.totalQuestions}</span>
+                                </td>
+                                <td style={{ padding: "10px 12px", textAlign: "center", color: "#64748B", fontSize: 13 }}>{e.durationMinutes} মিনিট</td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
